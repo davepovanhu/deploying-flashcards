@@ -1,36 +1,43 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
 import google.generativeai as genai
 import os
-from io import BytesIO
+from dotenv import load_dotenv
 
-app = FastAPI()
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Adjust this to restrict to specific domains if needed
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
-)
+# Load environment variables from .env
+load_dotenv()
 
 # Configure Google Generative AI API Key
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    raise ValueError("GOOGLE_API_KEY is not set in the environment")
+
 genai.configure(api_key=GOOGLE_API_KEY)
 
+# FastAPI app setup
+app = FastAPI()
 
+# Allow cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow requests from any domain for testing
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
+
+# Flashcards generation endpoint
 @app.post("/generate-flashcards/")
 async def generate_flashcards(summary: str = Form(...)):
     """
-    Generate flashcards from the provided summary.
-    If no summary is provided, return an error message.
+    Generate flashcards from the provided summary using Google Generative AI.
+    Returns a list of flashcards in Question || Answer format.
     """
     if not summary:
-        return {"error": "No text provided to generate flashcards"}
+        return {"error": "No summary provided to generate flashcards"}
 
     try:
-        # Use the Generative AI to generate questions and answers from the summary
+        # Use the Generative AI to generate flashcards
         model = genai.GenerativeModel("gemini-1.5-flash")
         flashcard_result = model.generate_content([summary, "Generate flashcards in a Question || Answer format."])
 
@@ -43,14 +50,19 @@ async def generate_flashcards(summary: str = Form(...)):
         return {"flashcards": flashcards}
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Error generating flashcards: {str(e)}"}
 
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint to ensure the service is running properly.
+    """
+    return {"status": "ok", "message": "Flashcard generator is healthy"}
+
+# Root endpoint
 @app.get("/")
 async def root():
-    """
-    Simple GET endpoint to verify the service is running.
-    """
-    return {"message": "Flashcard Generator is running! You can post summaries to /generate-flashcards to get flashcards."}
+    return {"message": "Welcome to the Flashcard Generator API!"}
 
-# To run the app: uvicorn main:app --reload
